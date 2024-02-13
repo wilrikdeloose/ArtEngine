@@ -5,6 +5,8 @@ import requests
 from dotenv import load_dotenv
 from openai import OpenAI
 
+from PresentationEngine import make_presentation
+
 os.system('cls')
 
 # TODO: use config settings in script
@@ -151,23 +153,30 @@ print("Resulting prompt: \n" + image_prompt + "\n")
 print(cmd_string + "Generating artbook imagery...")
 
 artstages = [
-    { "type" : "moodboard", "definition" : 'Mood boards are visual collections designed to express the core essence, style, and atmosphere of a specific creative concept. They are composed of an array of carefully selected images, text snippets, color swatches, and various inspirational materials. Each element within a mood board is thoughtfully placed to complement and interact with the others, crafting a unified narrative that encapsulates the theme, mood, and aesthetic vision of the project it embodies. The arrangement of these elements is key, as it should guide the viewer through the mood board in a way that tells a coherent and compelling story about the underlying concept, effectively communicating the intended emotional and visual experience.' },
-    { "type" : "charcoal",  "definition" : 'Charcoal Impressions are defined as: Extremely rough, gestural artworks that prioritize emotion and atmosphere, with no fine detail whatsoever. Just enough to recognize the subject. Utilizing the stark contrast of black and white, they capture the essence of subjects with broad, sweeping strokes and a textural quality that conveys a strong, visceral sense of form and space. Don\'t use color, only black and white.' },
-    { "type" : "concept", "definition" : 'Concept Sketches: Begin with loose, exploratory pen and pencil drawings or sketches that capture the initial ideas, themes, and compositions. These are often rough and not very detailed, focusing on capturing the essence or a fleeting thought. The sketch is not finished and one half of the image doesn\'t have coloring applied yet. Make sure to add sketch details to the image. Only draw the image and not pens, pencils or whatsoever.' },
-    # { "type" : "color", "definition" : 'Color Studies are defined as: Artistic technique used to experiment with color combinations, contrasts, and transitions within a series of variations to observe the effects on composition and perception.' },
-    { "type" : "drawing", "definition" : 'Detailed Drawings are defined as: Moving from rough sketches to detailed drawings involves refining the shapes, textures, and details of each element in the composition. This stage is about finalizing the design and layout before moving on to the final medium. It has lots of detail and closely resembles the final artwork, both visually as in quality.' },
-    # { "type" : "medium", "definition" : 'Medium Experiments are defined as: Experimenting with different mediums on smaller scales to understand how each can be manipulated to achieve the desired effect. This stage might involve testing various paints, inks, digital tools, or unconventional materials.' },
-    { "type" : "copy", "definition" : 'Exact Copies are defined as: The creation of an exact copy entails producing a work that is an identical replication of the original subject or artwork. This process requires meticulous attention to every aspect of the original, including color, form, texture, and scale. An exact copy is indistinguishable from the original, matching it in every detail and quality, serving as a precise duplicate without deviation.' },
+    # { "type" : "moodboard", "definition" : 'Mood boards are visual collections designed to express the core essence, style, and atmosphere of a specific creative concept. They are composed of an array of carefully selected images, text snippets, color swatches, and various inspirational materials. Each element within a mood board is thoughtfully placed to complement and interact with the others, crafting a unified narrative that encapsulates the theme, mood, and aesthetic vision of the project it embodies. The arrangement of these elements is key, as it should guide the viewer through the mood board in a way that tells a coherent and compelling story about the underlying concept, effectively communicating the intended emotional and visual experience.' },
+    # { "type" : "charcoal",  "definition" : 'Charcoal Impressions are defined as: Extremely rough, gestural artworks that prioritize emotion and atmosphere, with no fine detail whatsoever. Just enough to recognize the subject. Utilizing the stark contrast of black and white, they capture the essence of subjects with broad, sweeping strokes and a textural quality that conveys a strong, visceral sense of form and space. Don\'t use color, only black and white.' },
+    # { "type" : "concept", "definition" : 'Concept Sketches: Begin with loose, exploratory pen and pencil drawings or sketches that capture the initial ideas, themes, and compositions. These are often rough and not very detailed, focusing on capturing the essence or a fleeting thought. The sketch is not finished and one half of the image doesn\'t have coloring applied yet. Make sure to add sketch details to the image. Only draw the image and not pens, pencils or whatsoever.' },
+    # { "type" : "drawing", "definition" : 'Detailed Drawings are defined as: Moving from rough sketches to detailed drawings involves refining the shapes, textures, and details of each element in the composition. This stage is about finalizing the design and layout before moving on to the final medium. It has lots of detail and closely resembles the final artwork, both visually as in quality.' },
+    { "type" : "masterpiece", "definition" : 'Exact Copies are defined as: The creation of an exact copy entails producing a work that is an identical replication of the original subject or artwork. This process requires meticulous attention to every aspect of the original, including color, form, texture, and scale. An exact copy is indistinguishable from the original, matching it in every detail and quality, serving as a precise duplicate without deviation.' },
 ]
 
 output_folder = user_input["output_dir"] + "/"
 if (not os.path.isdir(output_folder)):
     os.mkdir(output_folder)
 
+# create empty array for presentation
+presentation = []
+
 max_image_generation_retries = 0
-for i in range(user_input["variations"]):
-    for artstage in artstages:
-        prompt = artstage['definition'] + " Generate a " + artstage["type"] + ", following the definition from before, for the folowing image description: " + image_prompt + ". Don't generate the image from the description, but make sure to generate a " + artstage["type"] + ", based on that description. Don't generate any text, logos or other attributes outside of the " + artstage["type"]
+for artstage in artstages:
+    artstage_object = {
+        "title": artstage["type"],
+        "image_url": "input.jpg",
+        "description": "Test test test",
+        "images": []
+    }
+    for i in range(user_input["variations"]):
+        prompt = artstage['definition'] + " Generate a " + artstage["type"] + ", following the definition from before, for the folowing image description: " + image_prompt + ". Make sure that all central subjects are in frame. Don't generate the image from the description, but make sure to generate a " + artstage["type"] + ", based on that description. Don't generate any text, logos or other attributes outside of the " + artstage["type"]
 
         image_generated = False
         while (not image_generated) and (max_image_generation_retries < config["max_image_generation_retries"]):
@@ -192,16 +201,19 @@ for i in range(user_input["variations"]):
                     iterator = iterator + 1
 
                 local_image_url = download_image(image_url, output_url)
+                artstage_object["images"].append(output_url)
                 print(cmd_string + artstage['type'].capitalize() + " image saved as " + output_url)
                 image_generated = True
-            except Exception:
+
+            except Exception as e:
+                print(e)
                 print(cmd_string + 'ERROR! Generated prompt not accepted by DALL·E. Rephrasing...\n')
                 client.chat.completions.create(
                     model="gpt-4",
                     max_tokens=2048,
                     temperature=0.1,
                     messages=[
-                        { "role": "user", "content": "Slighlty adapt the following prompt as it was denied by DALL-E: " + image_prompt },
+                        { "role": "user", "content": "The following prompt was denied by DALL-E: " + image_prompt + " with this error: " + e + ". Change it so that it is accepted in the next try." },
                     ],
                 )
                 image_prompt = completion.choices[0].message.content
@@ -210,8 +222,11 @@ for i in range(user_input["variations"]):
 
         if max_image_generation_retries == config["max_image_generation_retries"]:
             sys.exit("ERROR! Maximum number or generation retries exceeded (%s)" % config["max_image_generation_retries"])
+    
+    presentation.append(artstage_object)
             
-    # TODO: generate 2 or 3 alternatives to the original artwork
+    # TODO (if openai improves): generate 2 or 3 alternatives to the original artwork
     
 # TODO: generate powerpoint
+make_presentation(user_input["track_name"], presentation)
 print(cmd_string + "Artbook generation complete!\n")
